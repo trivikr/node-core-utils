@@ -106,12 +106,13 @@ Possible use cases:
 
 1. Walk CI for the latest 100 runs of `node-test-pull-request`,
    aggregate failures, write the results into a Markdown file,
-   and then cache the responses from Jenkins so that the next time the command
-   is run, it picks up cached data written on disk for jobs whose results
-   are known.
+   and then cache the responses from Jenkins and changed-file responses from
+   GitHub so that the next time the command is run, it picks up cached data
+   written on disk for jobs and PR revisions whose results are known.
 
    Note: results are cached in `$tmpdir/ncu/cache`, so you
-   may want to clean it up from time to time.
+   may want to clean it up from time to time. GitHub changed-file responses are
+   stored in the `github-pr-files` subdirectory and keyed by tested revision.
 
    ```
    ncu-ci walk pr --stats --cache --markdown results.md

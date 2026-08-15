@@ -13,7 +13,10 @@ import { jobCache } from '../lib/ci/build-types/job.js';
 import { PRBuild } from '../lib/ci/build-types/pr_build.js';
 import { CommitBuild } from '../lib/ci/build-types/commit_build.js';
 import { DailyBuild } from '../lib/ci/build-types/daily_build.js';
-import { FailureAggregator } from '../lib/ci/failure_aggregator.js';
+import {
+  FailureAggregator,
+  prFilesCache
+} from '../lib/ci/failure_aggregator.js';
 import { BenchmarkRun } from '../lib/ci/build-types/benchmark_run.js';
 import { HealthBuild } from '../lib/ci/build-types/health_build.js';
 import { CITGMBuild } from '../lib/ci/build-types/citgm_build.js';
@@ -82,7 +85,7 @@ const args = yargs(hideBin(process.argv))
         .option('cache', {
           default: false,
           type: 'boolean',
-          describe: 'Cache the responses from Jenkins in $tmpdir/ncu/cache for testing'
+          describe: 'Cache Jenkins and GitHub responses in $tmpdir/ncu/cache'
         })
         .option('limit', {
           default: 99,
@@ -438,6 +441,7 @@ class WalkCommand extends CICommand {
     super(cli, request, argv);
     if (argv.cache) {
       jobCache.enable();
+      prFilesCache.enable();
     }
   }
 
@@ -461,6 +465,7 @@ class WalkCommand extends CICommand {
       return;
     }
     const aggregator = new FailureAggregator(cli, this.json);
+    await aggregator.filterPRModifiedTests(this.request, prFilesCache);
     this.json = aggregator.aggregate();
     cli.log('');
     cli.separator('Stats');

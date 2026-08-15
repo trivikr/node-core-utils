@@ -43,7 +43,10 @@ describe('Jenkins', () => {
     const expectedPrJson = fixtures.readJSON(
       ...prefix, 'expected-pr.json'
     );
-    assert.deepStrictEqual(prBuild.formatAsJson(), expectedPrJson);
+    const prJson = prBuild.formatAsJson();
+    assert.deepStrictEqual(prJson, expectedPrJson);
+    assert.strictEqual(prJson[0].revision, prBuild.change.commitId);
+    assert.strictEqual(Object.keys(prJson[0]).includes('revision'), false);
 
     const expectedCommitJson = fixtures.readJSON(
       ...prefix, 'expected-commit.json'
