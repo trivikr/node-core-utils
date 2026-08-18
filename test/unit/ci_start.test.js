@@ -1,8 +1,7 @@
-import { describe, it, before, afterEach, beforeEach } from 'node:test';
+import { describe, it, afterEach, beforeEach } from 'node:test';
 import assert from 'assert';
 
 import * as sinon from 'sinon';
-import { FormData } from 'undici';
 
 import {
   RunPRJob,
@@ -16,6 +15,7 @@ import TestCLI from '../fixtures/test_cli.js';
 import { PRBuild } from '../../lib/ci/build-types/pr_build.js';
 import { JobParser } from '../../lib/ci/ci_type_parser.js';
 import PRData from '../../lib/pr_data.js';
+import { MultipartBody } from '../../lib/http.js';
 
 describe('Jenkins', () => {
   const owner = 'nodejs';
@@ -23,40 +23,35 @@ describe('Jenkins', () => {
   const prid = 123456;
   const crumb = 'asdf1234';
 
-  before(() => {
-    sinon.stub(FormData.prototype, 'append').callsFake(function(key, value) {
-      assert.strictEqual(key, 'json');
-      const { parameter } = JSON.parse(value);
-      // Expected parameters are different for node-test-pull-request and
-      // node-test-commit-v8-linux, but we don't know which this FormData
-      // is for, so we make a guess.
-      const expectedParameters = parameter.some(({ name, _ }) => name === 'PR_ID')
-        ? {
-            CERTIFY_SAFE: 'on',
-            COMMIT_SHA_CHECK: 'deadbeef',
-            TARGET_GITHUB_ORG: owner,
-            TARGET_REPO_NAME: repo,
-            PR_ID: prid,
-            REBASE_ONTO: '<pr base branch>',
-            DESCRIPTION_SETTER_DESCRIPTION: ''
-          }
-        : {
-            GITHUB_ORG: owner,
-            REPO_NAME: repo,
-            GIT_REMOTE_REF: `refs/pull/${prid}/head`,
-            COMMIT_SHA_CHECK: 'deadbeef'
-          };
-      for (const { name, value } of parameter) {
-        assert.strictEqual(value, expectedParameters[name]);
-        delete expectedParameters[name];
-      }
-      assert.strictEqual(Object.keys(expectedParameters).length, 0);
+  function assertPayload(body) {
+    assert.ok(body instanceof MultipartBody);
+    const match = /\r\n\r\n([\s\S]+)\r\n--/.exec(body.toBuffer().toString());
+    assert.ok(match);
+    const { parameter } = JSON.parse(match[1]);
+    const parameters = Object.fromEntries(
+      parameter.map(({ name, value }) => [name, value])
+    );
+    assert.ok(parameters.COMMIT_SHA_CHECK);
 
-      this._validated = true;
-
-      return FormData.prototype.append.wrappedMethod.bind(this)(key, value);
-    });
-  });
+    if ('PR_ID' in parameters) {
+      assert.deepStrictEqual(parameters, {
+        CERTIFY_SAFE: 'on',
+        COMMIT_SHA_CHECK: parameters.COMMIT_SHA_CHECK,
+        TARGET_GITHUB_ORG: owner,
+        TARGET_REPO_NAME: repo,
+        PR_ID: prid,
+        REBASE_ONTO: '<pr base branch>',
+        DESCRIPTION_SETTER_DESCRIPTION: ''
+      });
+    } else {
+      assert.deepStrictEqual(parameters, {
+        GITHUB_ORG: owner,
+        REPO_NAME: repo,
+        GIT_REMOTE_REF: `refs/pull/${prid}/head`,
+        COMMIT_SHA_CHECK: parameters.COMMIT_SHA_CHECK
+      });
+    }
+  }
 
   it('should fail if starting node-pull-request throws', async() => {
     const cli = new TestCLI();
@@ -99,7 +94,7 @@ describe('Jenkins', () => {
           assert.strictEqual(url, CI_PR_URL);
           assert.strictEqual(method, 'POST');
           assert.deepStrictEqual(headers, { 'Jenkins-Crumb': crumb });
-          assert.ok(body._validated);
+          assertPayload(body);
           return Promise.resolve({ status: 201 });
         }),
       json: sinon.stub().withArgs(CI_CRUMB_URL)
@@ -127,13 +122,13 @@ describe('Jenkins', () => {
           assert.strictEqual(url, CI_PR_URL);
           assert.strictEqual(method, 'POST');
           assert.deepStrictEqual(headers, { 'Jenkins-Crumb': crumb });
-          assert.ok(body._validated);
+          assertPayload(body);
           return Promise.resolve({ status: 201 });
         }).onSecondCall().callsFake((url, { method, headers, body }) => {
           assert.strictEqual(url, CI_V8_URL);
           assert.strictEqual(method, 'POST');
           assert.deepStrictEqual(headers, { 'Jenkins-Crumb': crumb });
-          assert.ok(body._validated);
+          assertPayload(body);
           return Promise.resolve({ status: 201 });
         }),
       json: sinon.stub().withArgs(CI_CRUMB_URL)
@@ -152,7 +147,7 @@ describe('Jenkins', () => {
           assert.strictEqual(url, CI_PR_URL);
           assert.strictEqual(method, 'POST');
           assert.deepStrictEqual(headers, { 'Jenkins-Crumb': crumb });
-          assert.ok(body._validated);
+          assertPayload(body);
           return Promise.resolve({ status: 401 });
         }),
       json: sinon.stub().withArgs(CI_CRUMB_URL)
@@ -190,7 +185,7 @@ describe('Jenkins', () => {
               assert.strictEqual(url, CI_PR_URL);
               assert.strictEqual(method, 'POST');
               assert.deepStrictEqual(headers, { 'Jenkins-Crumb': crumb });
-              assert.ok(body._validated);
+              assertPayload(body);
               return Promise.resolve({ status: 201 });
             }),
           json: sinon.stub().withArgs(CI_CRUMB_URL)
