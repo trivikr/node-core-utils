@@ -1,12 +1,7 @@
 import assert from 'assert';
 
-async function mockCredentials(options) {
-  assert.deepStrictEqual(options, {
-    noSave: true,
-    scopes: ['user:email', 'read:org'],
-    note: 'node-core-utils CLI tools',
-    noDeviceFlow: true
-  });
+async function mockCredentials(...args) {
+  assert.deepStrictEqual(args, []);
   return {
     user: 'nyancat',
     token: '0123456789abcdef'
