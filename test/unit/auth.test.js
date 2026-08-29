@@ -5,6 +5,8 @@ import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 
+import { getGitHubCredentials } from '../../lib/auth.js';
+
 let testCounter = 0; // for tmp directories
 
 const FIRST_TIME_MSG =
@@ -18,6 +20,46 @@ const MOCKED_TOKEN = JSON.stringify({
 });
 
 describe('auth', async function() {
+  it('prompts invisibly for a token and fetches the GitHub username', async function() {
+    const token = 'github_pat_mock_token';
+    const credentials = await getGitHubCredentials(async(options) => {
+      assert.deepStrictEqual(options, {
+        message: 'Paste your GitHub personal access token:',
+        validate: options.validate
+      });
+      assert.strictEqual(options.validate(''), 'A token is required');
+      assert.strictEqual(options.validate(token), true);
+      return token;
+    }, async(url, options) => {
+      assert.strictEqual(url, 'https://api.github.com/user');
+      assert.deepStrictEqual(options, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${token}`,
+          'User-Agent': 'node-core-utils'
+        }
+      });
+      return new Response(JSON.stringify({ login: 'nyancat' }), {
+        headers: { 'Content-Type': 'application/json' }
+      });
+    });
+
+    assert.deepStrictEqual(credentials, { user: 'nyancat', token });
+  });
+
+  it('rejects a token that GitHub does not authenticate', async function() {
+    await assert.rejects(
+      getGitHubCredentials(
+        async() => 'bad-token',
+        async() => new Response(JSON.stringify({ message: 'Bad credentials' }), {
+          status: 401,
+          headers: { 'Content-Type': 'application/json' }
+        })
+      ),
+      /Bad credentials/
+    );
+  });
+
   it('asks for auth data if no ncurc is found', async function() {
     await runAuthScript(
       undefined,
