@@ -1,11 +1,16 @@
-import { describe, it } from 'node:test';
+import { after, describe, it, mock } from 'node:test';
 import { spawn } from 'node:child_process';
 import path from 'node:path';
 import fs from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import assert from 'node:assert';
 
-import { getGitHubCredentials } from '../../lib/auth.js';
+const password = mock.fn();
+mock.module('@inquirer/prompts', {
+  namedExports: { password }
+});
+const { getGitHubCredentials } = await import('../../lib/auth.js');
+after(() => mock.reset());
 
 let testCounter = 0; // for tmp directories
 
@@ -20,9 +25,9 @@ const MOCKED_TOKEN = JSON.stringify({
 });
 
 describe('auth', async function() {
-  it('prompts invisibly for a token and fetches the GitHub username', async function() {
+  it('prompts invisibly for a token and fetches the GitHub username', async function(t) {
     const token = 'github_pat_mock_token';
-    const credentials = await getGitHubCredentials(async(options) => {
+    password.mock.mockImplementation(async(options) => {
       assert.deepStrictEqual(options, {
         message: 'Paste your GitHub personal access token:',
         validate: options.validate
@@ -30,7 +35,8 @@ describe('auth', async function() {
       assert.strictEqual(options.validate(''), 'A token is required');
       assert.strictEqual(options.validate(token), true);
       return token;
-    }, async(url, options) => {
+    });
+    t.mock.method(globalThis, 'fetch', async(url, options) => {
       assert.strictEqual(url, 'https://api.github.com/user');
       assert.deepStrictEqual(options, {
         headers: {
@@ -44,20 +50,20 @@ describe('auth', async function() {
       });
     });
 
+    const credentials = await getGitHubCredentials();
     assert.deepStrictEqual(credentials, { user: 'nyancat', token });
   });
 
-  it('rejects a token that GitHub does not authenticate', async function() {
-    await assert.rejects(
-      getGitHubCredentials(
-        async() => 'bad-token',
-        async() => new Response(JSON.stringify({ message: 'Bad credentials' }), {
-          status: 401,
-          headers: { 'Content-Type': 'application/json' }
-        })
-      ),
-      /Bad credentials/
-    );
+  it('rejects a token that GitHub does not authenticate', async function(t) {
+    password.mock.mockImplementation(async() => 'bad-token');
+    t.mock.method(globalThis, 'fetch', async() => {
+      return new Response(JSON.stringify({ message: 'Bad credentials' }), {
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    });
+
+    await assert.rejects(getGitHubCredentials(), /Bad credentials/);
   });
 
   it('asks for auth data if no ncurc is found', async function() {
