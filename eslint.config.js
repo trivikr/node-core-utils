@@ -1,13 +1,13 @@
 import pluginJs from '@eslint/js';
-import neostandard, { plugins } from 'neostandard';
-import importPlugin from 'eslint-plugin-import';
+import { neostandard, plugins } from 'neostandard';
+import { flatConfigs as importConfigs } from 'eslint-plugin-import-x';
 
 export default [
   pluginJs.configs.recommended,
   ...neostandard({ semi: true }),
   plugins.n.configs['flat/recommended'],
   plugins.promise.configs['flat/recommended'],
-  importPlugin.flatConfigs.recommended,
+  importConfigs.recommended,
   {
     ignores: [
       '**/.git',
@@ -24,7 +24,12 @@ export default [
       ecmaVersion: 'latest',
     },
     rules: {
-      '@stylistic/space-before-function-paren': ['error', 'never'],
+      '@stylistic/space-before-function-paren': ['error', {
+        anonymous: 'never',
+        named: 'ignore',
+        asyncArrow: 'never',
+        catch: 'always',
+      }],
       '@stylistic/no-multi-spaces': ['error', { ignoreEOLComments: true }],
       camelcase: 'off',
       '@stylistic/max-len': [
@@ -40,6 +45,7 @@ export default [
         ignoreRestSiblings: true,
         vars: 'all',
       }],
+      'no-unassigned-vars': 'off',
       'promise/always-return': ['error', { ignoreLastCallback: true }],
       'n/no-process-exit': 'off',
       'n/no-unsupported-features/node-builtins': 'off',
